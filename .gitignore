@@ -1,0 +1,13 @@
+results/
+logs/
+.snakemake/
+__pycache__/
+*.pyc
+*.tmp
+*.rds
+*.RDS
+*.RData
+*.Rhistory
+.DS_Store
+.conda/
+/envs/

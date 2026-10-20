@@ -1,0 +1,7 @@
+name: bat1k-snakemake
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - snakemake-minimal>=8
+  - snakemake-executor-plugin-slurm

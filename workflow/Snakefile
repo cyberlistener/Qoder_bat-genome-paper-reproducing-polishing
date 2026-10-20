@@ -1,0 +1,268 @@
+"""Reproducible per-gene aBSREL screen for the Bat1K immune paper.
+
+Run from the repository root:
+    snakemake -s workflow/Snakefile --cores 8
+    snakemake -s workflow/Snakefile --cores 8 downstream
+
+`all` is the offline core (QC, pruning, aBSREL, aggregation).  `downstream`
+adds GO branch counts, g:Profiler enrichment and the Bayesian regression; it
+needs R and, for enrichment, network access to g:Profiler.
+"""
+import os
+from pathlib import Path
+
+from snakemake.utils import min_version
+
+min_version("8.0")
+
+configfile: "workflow/config/config.yaml"
+
+WORKFLOW_DIR = str(Path(workflow.snakefile).resolve().parent)
+GENES = glob_wildcards(os.path.join(config["alignments"], "{gene}.fa")).gene
+if not GENES:
+    raise ValueError(f"No alignments found under {config['alignments']!r} (expected {{gene}}.fa)")
+
+GO_TERMS = list(config.get("go_terms", []))
+GO_SAFE = [g.replace(":", "_") for g in GO_TERMS]
+if not GO_TERMS:
+    raise ValueError("config['go_terms'] must contain at least one GO term")
+
+SCREEN_ENV = os.path.join(WORKFLOW_DIR, "envs", "screen.yaml")
+PY_ENV = os.path.join(WORKFLOW_DIR, "envs", "python.yaml")
+R_ENV = os.path.join(WORKFLOW_DIR, "envs", "r.yaml")
+
+
+rule all:
+    input:
+        "results/tree.labeled.nwk",
+        "results/branch_metadata.tsv",
+        expand("results/genes/{gene}.branch.tsv", gene=GENES),
+        expand("results/genes/{gene}.status.json", gene=GENES),
+        "results/aggregate/branch_tests.tsv.gz",
+        "results/aggregate/gene_summary.tsv.gz",
+        "results/aggregate/branch_summary.tsv",
+        "results/aggregate/run_summary.json",
+
+
+rule downstream:
+    input:
+        expand("results/aggregate/branch_counts_{go}.tsv", go=GO_SAFE),
+        "results/enrichment/gprofiler_custom.tsv",
+        "results/enrichment/gprofiler_default.tsv",
+        "results/enrichment/foreground_sizes.tsv",
+        "results/regression/model_comparison_main.tsv",
+        "results/regression/model_comparison_sensitivity.tsv",
+        "results/regression/branch_observed_expected.tsv",
+        "results/regression/hypothesis_taxon.tsv",
+        "results/regression/diagnostics.txt",
+
+
+rule label_tree:
+    input:
+        tree=config["tree"],
+        species=config["species_metadata"],
+    output:
+        tree="results/tree.labeled.nwk",
+        metadata="results/branch_metadata.tsv",
+    params:
+        script=os.path.join(WORKFLOW_DIR, "scripts", "make_branch_metadata.py"),
+    log:
+        "logs/label_tree.log",
+    conda:
+        SCREEN_ENV
+    shell:
+        """
+        set -euo pipefail
+        python {params.script} \
+            --tree {input.tree} \
+            --species-metadata {input.species} \
+            --out-tree {output.tree} \
+            --out-metadata {output.metadata} > {log} 2>&1
+        """
+
+
+rule screen_gene:
+    input:
+        aln=os.path.join(config["alignments"], "{gene}.fa"),
+        tree="results/tree.labeled.nwk",
+        species=config["species_metadata"],
+    output:
+        branch="results/genes/{gene}.branch.tsv",
+        status="results/genes/{gene}.status.json",
+    params:
+        script=os.path.join(WORKFLOW_DIR, "scripts", "screen_gene.py"),
+        min_taxa_fraction=config["qc"]["min_taxa_fraction"],
+        min_taxa_absrel=config["qc"]["min_taxa_absrel"],
+        min_codons=config["qc"]["min_codons"],
+        allow_stops="--allow-internal-stops" if config["qc"]["allow_internal_stops"] else "",
+        max_invalid_fraction=config["qc"]["max_invalid_fraction"],
+        p_threshold=config["absrel"]["p_threshold"],
+        branches=config["absrel"]["branches"],
+        genetic_code=config["absrel"]["genetic_code"],
+        hyphy=config["absrel"]["executable"],
+        timeout_sec=config["absrel"]["timeout_sec"],
+    threads: 1
+    resources:
+        mem_mb=config["resources"]["mem_mb"],
+        runtime=config["resources"]["runtime_min"],
+    retries: 1
+    log:
+        "logs/screen/{gene}.log",
+    conda:
+        SCREEN_ENV
+    shell:
+        """
+        set -euo pipefail
+        python {params.script} \
+            --gene {wildcards.gene} \
+            --alignment {input.aln} \
+            --tree {input.tree} \
+            --species-metadata {input.species} \
+            --out-branch {output.branch} \
+            --out-status {output.status} \
+            --min-taxa-fraction {params.min_taxa_fraction} \
+            --min-taxa-absrel {params.min_taxa_absrel} \
+            --min-codons {params.min_codons} \
+            --max-invalid-fraction {params.max_invalid_fraction} \
+            --p-threshold {params.p_threshold} \
+            --branches {params.branches} \
+            --genetic-code {params.genetic_code} \
+            --hyphy {params.hyphy} \
+            --timeout-sec {params.timeout_sec} \
+            {params.allow_stops} > {log} 2>&1
+        """
+
+
+rule aggregate:
+    input:
+        branch_files=expand("results/genes/{gene}.branch.tsv", gene=GENES),
+        status_files=expand("results/genes/{gene}.status.json", gene=GENES),
+        metadata="results/branch_metadata.tsv",
+    output:
+        branch_tests="results/aggregate/branch_tests.tsv.gz",
+        gene_summary="results/aggregate/gene_summary.tsv.gz",
+        branch_summary="results/aggregate/branch_summary.tsv",
+        run_summary="results/aggregate/run_summary.json",
+    params:
+        script=os.path.join(WORKFLOW_DIR, "scripts", "aggregate_absrel.py"),
+        branch_dir="results/genes",
+        status_dir="results/genes",
+        p_threshold=config["absrel"]["p_threshold"],
+        fdr=config["gene_fdr"],
+    log:
+        "logs/aggregate.log",
+    conda:
+        PY_ENV
+    shell:
+        """
+        set -euo pipefail
+        python {params.script} \
+            --branch-dir {params.branch_dir} \
+            --status-dir {params.status_dir} \
+            --branch-metadata {input.metadata} \
+            --outdir results/aggregate \
+            --p-threshold {params.p_threshold} \
+            --fdr {params.fdr} > {log} 2>&1
+        """
+
+
+rule branch_counts:
+    input:
+        branch_tests="results/aggregate/branch_tests.tsv.gz",
+        branch_summary="results/aggregate/branch_summary.tsv",
+        branch_metadata="results/branch_metadata.tsv",
+        gene2go=config["gene2go"],
+    output:
+        "results/aggregate/branch_counts_{go}.tsv",
+    params:
+        script=os.path.join(WORKFLOW_DIR, "scripts", "make_branch_counts.py"),
+        go_id=lambda wildcards: GO_TERMS[GO_SAFE.index(wildcards.go)],
+    log:
+        "logs/branch_counts_{go}.log",
+    conda:
+        PY_ENV
+    shell:
+        """
+        set -euo pipefail
+        python {params.script} \
+            --branch-tests {input.branch_tests} \
+            --branch-summary {input.branch_summary} \
+            --branch-metadata {input.branch_metadata} \
+            --gene2go {input.gene2go} \
+            --go-id {params.go_id} \
+            --out {output} > {log} 2>&1
+        """
+
+
+rule enrichment:
+    input:
+        branch_tests="results/aggregate/branch_tests.tsv.gz",
+        gene_summary="results/aggregate/gene_summary.tsv.gz",
+        branch_metadata="results/branch_metadata.tsv",
+        gene_map=config["gene_map"],
+    output:
+        custom="results/enrichment/gprofiler_custom.tsv",
+        default="results/enrichment/gprofiler_default.tsv",
+        sizes="results/enrichment/foreground_sizes.tsv",
+    params:
+        script=os.path.join(WORKFLOW_DIR, "R", "enrichment_gprofiler_optimized.R"),
+        organism=config["enrichment"]["organism"],
+        sources=",".join(config["enrichment"]["sources"]),
+        fdr=config["enrichment"]["fdr"],
+        min_foreground=config["enrichment"]["min_foreground"],
+    log:
+        "logs/enrichment.log",
+    conda:
+        R_ENV
+    shell:
+        """
+        set -euo pipefail
+        Rscript {params.script} \
+            --branch-tests {input.branch_tests} \
+            --gene-summary {input.gene_summary} \
+            --branch-metadata {input.branch_metadata} \
+            --gene-map {input.gene_map} \
+            --outdir results/enrichment \
+            --organism {params.organism} \
+            --sources "{params.sources}" \
+            --fdr {params.fdr} \
+            --min-foreground {params.min_foreground} > {log} 2>&1
+        """
+
+
+rule regression:
+    input:
+        branch_counts=f"results/aggregate/branch_counts_{GO_SAFE[0]}.tsv",
+        branch_metadata="results/branch_metadata.tsv",
+    output:
+        main="results/regression/model_comparison_main.tsv",
+        sensitivity="results/regression/model_comparison_sensitivity.tsv",
+        observed_expected="results/regression/branch_observed_expected.tsv",
+        hypothesis="results/regression/hypothesis_taxon.tsv",
+        diagnostics="results/regression/diagnostics.txt",
+        pp_check="results/regression/pp_check_m1.png",
+    params:
+        script=os.path.join(WORKFLOW_DIR, "R", "count2branches_optimized.R"),
+        branch_length_col=config["regression"]["branch_length_col"],
+        seed=config["regression"]["seed"],
+        chains=config["regression"]["chains"],
+        iter=config["regression"]["iter"],
+        warmup=config["regression"]["warmup"],
+        min_branches=config["regression"]["min_branches"],
+    log:
+        "logs/regression.log",
+    conda:
+        R_ENV
+    shell:
+        """
+        set -euo pipefail
+        Rscript {params.script} \
+            --input {input.branch_counts} \
+            --outdir results/regression \
+            --branch-length-col {params.branch_length_col} \
+            --seed {params.seed} \
+            --chains {params.chains} \
+            --iter {params.iter} \
+            --warmup {params.warmup} \
+            --min-branches {params.min_branches} > {log} 2>&1
+        """

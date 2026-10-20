@@ -1,0 +1,44 @@
+# Toy configuration: synthetic fixtures only, for plumbing tests.
+# The numbers produced with this config have no biological meaning.
+alignments: "examples/toy/alignments"
+tree: "examples/toy/resources/species_tree.nwk"
+species_metadata: "examples/toy/resources/species_metadata.tsv"
+gene_map: "examples/toy/resources/gene_map.tsv"
+gene2go: "examples/toy/resources/gene2go.tsv"
+
+qc:
+  min_taxa_fraction: 0.6
+  min_taxa_absrel: 4
+  min_codons: 0
+  allow_internal_stops: false
+  max_invalid_fraction: 0.05
+
+absrel:
+  executable: "hyphy"
+  branches: "All"
+  genetic_code: "Universal"
+  p_threshold: 0.05
+  timeout_sec: 600
+
+gene_fdr: 0.05
+
+go_terms:
+  - "GO:0002376"
+
+enrichment:
+  organism: "hsapiens"
+  sources: ["GO:BP", "GO:CC", "GO:MF"]
+  fdr: 0.05
+  min_foreground: 1
+
+regression:
+  branch_length_col: "branch_length"
+  seed: 20250101
+  chains: 2
+  iter: 1000
+  warmup: 500
+  min_branches: 8
+
+resources:
+  mem_mb: 2000
+  runtime_min: 30

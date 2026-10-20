@@ -1,0 +1,7 @@
+taxon	order	is_bat
+bat1	Chiroptera	TRUE
+bat2	Chiroptera	TRUE
+pri1	Primates	FALSE
+rod1	Rodentia	FALSE
+rod2	Rodentia	FALSE
+art1	Artiodactyla	FALSE

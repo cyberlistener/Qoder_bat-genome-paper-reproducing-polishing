@@ -1,0 +1,10 @@
+branch_id	label	order	taxon	taxon_group	branch_type	branch_length	n_descendant_taxa	is_order_stem	n_genes_tested	n_genes_tested_all	count	fraction
+n00001	Chiroptera_stem	Chiroptera	bat	bat	internal	0.12	2	TRUE	2	3	2	1.0
+bat1	bat1	Chiroptera	bat	bat	terminal	0.05	1	FALSE	2	3	1	0.5
+bat2	bat2	Chiroptera	bat	bat	terminal	0.08	1	FALSE	2	3	1	0.5
+n00002	Euarchontoglires_stem	multiple	mixed	mixed	internal	0.15	3	FALSE	2	3	0	0.0
+pri1	pri1	Primates	non-bat	non-bat	terminal	0.06	1	FALSE	2	3	0	0.0
+n00003	Rodentia_stem	Rodentia	non-bat	non-bat	internal	0.09	2	TRUE	2	3	1	0.5
+rod1	rod1	Rodentia	non-bat	non-bat	terminal	0.03	1	FALSE	2	3	0	0.0
+rod2	rod2	Rodentia	non-bat	non-bat	terminal	0.04	1	FALSE	2	3	1	0.5
+art1	art1	Artiodactyla	non-bat	non-bat	terminal	0.20	1	FALSE	2	3	0	0.0

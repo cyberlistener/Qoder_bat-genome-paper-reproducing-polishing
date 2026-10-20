@@ -1,0 +1,48 @@
+# Paths are relative to the repository root (the directory from which you
+# invoke snakemake). Replace the example paths with your own inputs.
+alignments: "alignments"                     # one codon FASTA per gene: {gene}.fa
+tree: "resources/species_tree.nwk"           # MUST have branch lengths in substitutions/site
+species_metadata: "resources/species_metadata.tsv"
+gene_map: "resources/gene_map.tsv"           # transcript_id -> Ensembl gene id (for g:Profiler)
+gene2go: "resources/gene2go.tsv"             # long format: gene_id, go_id
+
+# Per-gene QC. The paper required >=60% of 115 mammals (69 taxa); keep the
+# same fraction here. min_codons=0 means no extra length filter.
+qc:
+  min_taxa_fraction: 0.6
+  min_taxa_absrel: 4
+  min_codons: 0
+  allow_internal_stops: false
+  max_invalid_fraction: 0.05
+
+absrel:
+  executable: "hyphy"
+  branches: "All"
+  genetic_code: "Universal"
+  p_threshold: 0.05
+  timeout_sec: 7200
+
+# Gene-level BH is an OPTIONAL sensitivity analysis, not the paper's primary
+# within-gene branch correction.
+gene_fdr: 0.05
+
+go_terms:
+  - "GO:0002376"
+
+enrichment:
+  organism: "hsapiens"
+  sources: ["GO:BP", "GO:CC", "GO:MF", "KEGG", "REAC", "WP"]
+  fdr: 0.05
+  min_foreground: 10
+
+regression:
+  branch_length_col: "branch_length"
+  seed: 20250101
+  chains: 4
+  iter: 4000
+  warmup: 2000
+  min_branches: 20
+
+resources:
+  mem_mb: 4000
+  runtime_min: 120

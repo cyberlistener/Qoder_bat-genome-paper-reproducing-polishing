@@ -1,0 +1,8 @@
+# Example Snakemake 8 SLURM profile.  Adjust partition/account for your site.
+executor: slurm
+jobs: 200
+latency-wait: 120
+retries: 1
+default-resources:
+  - mem_mb=4000
+  - runtime=120

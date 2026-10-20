@@ -1,0 +1,12 @@
+name: bat1k-screen
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python=3.10
+  - hyphy=2.5.8
+  - dendropy>=4.6
+  - biopython>=1.81
+  - pandas>=2.0
+  - numpy>=1.24
+  - pyyaml

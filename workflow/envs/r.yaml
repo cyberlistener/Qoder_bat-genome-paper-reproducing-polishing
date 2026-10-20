@@ -1,0 +1,17 @@
+name: bat1k-r
+channels:
+  - conda-forge
+  - r
+dependencies:
+  - r-base=4.3
+  - r-brms>=2.21
+  - r-loo>=2.6
+  - r-ggplot2
+  - r-dplyr
+  - r-readr
+  - r-optparse
+  - r-data.table
+  - r-gprofiler2
+  - r-geepack
+  - r-sandwich
+  - r-lmtest
